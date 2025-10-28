@@ -7,7 +7,6 @@ import warnings
 from shapely.geometry import box
 from rasterio.features import geometry_mask
 import xarray as xr
-import hydromt  # noqa: F401
 
 def tif_to_clipped_masked_array(tif_path: str, geojson_path: str) -> tuple[np.ma.MaskedArray, rasterio.Affine, rasterio.crs.CRS]:
     """
