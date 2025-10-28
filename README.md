@@ -45,12 +45,12 @@ pip install -e .
 
 ## Usage
 
-### Running the Threshold Model
+### Running a model
 
-The main entry point is `run_threshold_model.py`, which applies a trained threshold model to input data:
+The main entry point is `run_model.py`, which applies a trained threshold model or manifold model to input data:
 
 ```bash
-python src/eo_flood_ops/run_threshold_model.py \
+python src/eo_flood_ops/run_model.py \
     --input path/to/input_data.tif \
     --model path/to/trained_model.pkl \
     --output path/to/output_flood_map.tif
@@ -58,7 +58,7 @@ python src/eo_flood_ops/run_threshold_model.py \
 
 **Arguments:**
 - `--input`: Path to the input SAR/EO data (GeoTIFF format)
-- `--model`: Path to the pickled trained threshold model
+- `--model`: Path to the pickled trained model
 - `--output`: Path where the output flood extent map will be saved
 
 
@@ -79,7 +79,7 @@ PyInstaller is included in the project dependencies. Ensure you have activated y
 cd C:\Users\jong\Projects\EO-Flood-Ops
 
 # Build the executable
-python -m PyInstaller threshold_model.spec --clean
+python -m PyInstaller eo_flood_ops_model.spec --clean
 ```
 
 
@@ -91,7 +91,7 @@ python -m PyInstaller threshold_model.spec --clean
 ### Troubleshooting PyInstaller
 
 **ModuleNotFoundError for rasterio modules:**
-- Add the missing module to `hiddenimports` in `threshold_model.spec`
+- Add the missing module to `hiddenimports` in `eo_flood_ops_model.spec`
 - Common modules: `rasterio.sample`, `rasterio.vrt`, `rasterio._shim`, `rasterio.crs`
 
 
@@ -102,14 +102,14 @@ EO-Flood-Ops/
 ├── src/
 │   └── eo_flood_ops/
 │       ├── __init__.py
-│       ├── run_threshold_model.py      # Main CLI script
+│       ├── run_model.py                # Main CLI script
 │       ├── thresholding_model.py       # Threshold model implementation
 │       ├── manifold_model.py           # Manifold-based model
 │       ├── model_utils.py              # Model utilities and data structures
 │       └── general_utils.py            # Geospatial utility functions
 ├── notebooks/                          # Jupyter notebooks for testing/demos
 ├── scripts/                            # Additional scripts
-├── threshold_model.spec                # PyInstaller specification file
+├── eo_flood_ops_model.spec             # PyInstaller specification file
 ├── pyproject.toml                      # Project metadata and dependencies
 └── README.md                           # This file
 ```

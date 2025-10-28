@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['src\\eo_flood_ops\\run_threshold_model.py'],
+    ['src\\eo_flood_ops\\run_model.py'],
     pathex=[],
     binaries=[],
     datas=[],
@@ -25,7 +25,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='threshold_model',
+    name='eo_flood_ops_model',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
