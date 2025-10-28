@@ -18,19 +18,19 @@ if __name__ == "__main__":
         description="Run threshold-based flood extent model."
     )
     parser.add_argument(
-        "--input",
+        "--input", "-i",
         type=str,
         required=True,
         help="Path to the input data.",
     )
     parser.add_argument(
-        "--model",
+        "--model", "-m",
         type=str,
         required=True,
         help="Path to pickled model.",
     )
     parser.add_argument(
-        "--output",
+        "--output", "-o",
         type=str,
         required=True,
         help="Path to save the output data.",
