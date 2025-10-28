@@ -8,7 +8,10 @@ from shapely.geometry import box
 from rasterio.features import geometry_mask
 import xarray as xr
 
-def tif_to_clipped_masked_array(tif_path: str, geojson_path: str) -> tuple[np.ma.MaskedArray, rasterio.Affine, rasterio.crs.CRS]:
+
+def tif_to_clipped_masked_array(
+    tif_path: str, geojson_path: str
+) -> tuple[np.ma.MaskedArray, rasterio.Affine, rasterio.crs.CRS]:
     """
     Clip a binary TIFF with a polygon from a GeoJSON file
     and return it as a masked array of True/False (wet/dry),
@@ -48,18 +51,21 @@ def tif_to_clipped_masked_array(tif_path: str, geojson_path: str) -> tuple[np.ma
             geometries=gdf.geometry,
             out_shape=data.shape,
             transform=clipped_transform,
-            invert=True  # True inside polygon
+            invert=True,  # True inside polygon
         )
 
         # Convert binary 1/0 to True/False
-        binary_mask = (data == 1)
+        binary_mask = data == 1
 
         # Apply polygon mask: everything outside polygon is masked
         masked_array = np.ma.masked_array(binary_mask, mask=~polygon_mask)
 
     return masked_array, clipped_transform, src.crs
 
-def tif_to_clipped_array(tif_path: str, geojson_path: str) -> tuple[np.ndarray, rasterio.Affine, rasterio.crs.CRS]:
+
+def tif_to_clipped_array(
+    tif_path: str, geojson_path: str
+) -> tuple[np.ndarray, rasterio.Affine, rasterio.crs.CRS]:
     """
     Clip DEM to the bounding box of the AOI but set everything outside the AOI polygon to NaN.
     Returns a numpy array (DEM values) with NaNs where data are outside the polygon.
@@ -81,16 +87,18 @@ def tif_to_clipped_array(tif_path: str, geojson_path: str) -> tuple[np.ndarray, 
         bbox_geom = [box(minx, miny, maxx, maxy).__geo_interface__]
 
         # Crop the DEM to the bounding box area
-        clipped_data, clipped_transform = mask(src, bbox_geom, crop=True, filled=True, nodata=np.nan)
+        clipped_data, clipped_transform = mask(
+            src, bbox_geom, crop=True, filled=True, nodata=np.nan
+        )
         data = clipped_data[0]
 
         # Now create a polygon mask (True inside polygon, False outside)
-        
+
         polygon_mask = geometry_mask(
             geometries=gdf.geometry,
             out_shape=data.shape,
             transform=clipped_transform,
-            invert=True  # True inside polygon
+            invert=True,  # True inside polygon
         )
 
         # Set everything outside polygon to NaN
@@ -127,11 +135,14 @@ def find_closest_valid(df, dt, station):
                 )
 
             if idx != df_sorted.index[0]:
-                print("Closest timestamp initially had -999, using next closest valid value.")
+                print(
+                    "Closest timestamp initially had -999, using next closest valid value."
+                )
             return row["datetime"], value
 
     # If all values are -999
     return None, None
+
 
 def generate_wet_dry_timeseries_ds(water_levels, timestamps, tm, transform, crs):
     """
@@ -151,6 +162,7 @@ def generate_wet_dry_timeseries_ds(water_levels, timestamps, tm, transform, crs)
     Returns:
         xr.Dataset: CF-compliant Dataset with dimensions (time, lat, lon)
     """
+
     def array_to_da(array, is_bool):
         """Convert boolean/float/masked array to xarray.DataArray with lat/lon."""
         if not isinstance(array, np.ma.MaskedArray):
@@ -232,9 +244,10 @@ def generate_wet_dry_timeseries_ds(water_levels, timestamps, tm, transform, crs)
 
     return ds
 
-def masked_array_to_da(masked_array: np.ma.MaskedArray,
-                       transform: rasterio.Affine,
-                       crs: rasterio.crs.CRS) -> xr.DataArray:
+
+def masked_array_to_da(
+    masked_array: np.ma.MaskedArray, transform: rasterio.Affine, crs: rasterio.crs.CRS
+) -> xr.DataArray:
     """
     Convert a single masked wet/dry raster (masked array from tif_to_clipped_masked_array)
     into an xarray.DataArray with lat/lon coordinates.
@@ -291,6 +304,7 @@ def masked_array_to_da(masked_array: np.ma.MaskedArray,
     da["lon"].attrs.update({"standard_name": "longitude", "units": "degrees_east"})
 
     return da
+
 
 def skill(da_sim, da_obs, da_msk, hmin=0.15):
     """
@@ -349,11 +363,11 @@ def skill(da_sim, da_obs, da_msk, hmin=0.15):
 
     ds_skill = xr.merge(
         [
-            csi.rename("C"),       # Critical Success Index
+            csi.rename("C"),  # Critical Success Index
             hit_rate.rename("H"),  # Hit rate
-            false_rate.rename("F"),# False alarm ratio
-            bias.rename("E"),      # Bias
-            f1_score.rename("F1")  # F1 Score
+            false_rate.rename("F"),  # False alarm ratio
+            bias.rename("E"),  # Bias
+            f1_score.rename("F1"),  # F1 Score
         ]
     )
 
@@ -363,7 +377,7 @@ def skill(da_sim, da_obs, da_msk, hmin=0.15):
     )
 
     # or leave both masked an true neg as 0
-    da_cm = da_cm.where(~da_msk, np.nan) 
+    da_cm = da_cm.where(~da_msk, np.nan)
 
     # preserve CRS if available
     if hasattr(da_sim, "raster"):
