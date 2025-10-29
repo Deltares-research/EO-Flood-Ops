@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Sequence
-
+from pathlib import Path
+import pickle
 
 from eo_flood_ops.thresholding_model import ThresholdingModel
 from eo_flood_ops.model_utils import (
@@ -136,3 +137,14 @@ class ManifoldModel:
             inundation_map=reference_inundation_map,
             agree_threshold=self.flood_agree_threshold,
         )
+    
+    def save(
+        self,
+        filedir: str | Path = ".",
+        filename: str | Path = "manifold_model.pickle",
+    ) -> str:
+        """Saves the model to a pickle file."""
+        filepath = Path(filedir) / Path(filename)
+        with open(filepath, "wb") as f:
+            pickle.dump(self, f)
+        return str(filepath)

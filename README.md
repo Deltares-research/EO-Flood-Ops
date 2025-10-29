@@ -57,7 +57,7 @@ python src/eo_flood_ops/run_model.py \
 ```
 
 **Arguments:**
-- `--input`: Path to the input SAR/EO data (GeoTIFF format)
+- `--input`: Path to the input water level data (CSV format)
 - `--model`: Path to the pickled trained model
 - `--output`: Path where the output flood extent map will be saved
 
