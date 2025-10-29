@@ -1,7 +1,7 @@
 # EO-Flood-Ops
-A Python package for **flood extent modeling** using Earth Observation (EO) data and threshold-based machine learning (ML) approaches. 
+A Python package for **flood modeling** using Earth Observation (EO) imagery, water level data and threshold-based machine learning (ML) approaches.
 
-EO-Flood-Ops provides tools to process satellite imagery, particularly **SAR data**, to detect and map flood extents.  
+EO-Flood-Ops provides tools to process satellite imagery, particularly **SAR data**, to detect and map flood extents and depths.  
 It is suitable for both **research** and **operational flood monitoring** applications.
 
 
@@ -20,8 +20,8 @@ EO-Flood-Ops provides tools to **prepare all necessary datasets** — including 
 
 ## Features
 
-- **Threshold-based flood detection**: Automated learning and application of optimal SAR thresholds for flood mapping
 - **Geospatial utilities**: Tools for processing GeoTIFF files, clipping, masking, and generating time series data
+- **Model training**: Data preparation, automated learning and training of models based on water levels and EO-derived flood maps
 - **Model persistence**: Save and load trained models for operational deployment
 - **Executable generation**: Build standalone executables for deployment in production environments
 
@@ -86,7 +86,7 @@ python src/eo_flood_ops/run_model.py \
 - `--model`: Path to the pickled trained model
 - `--output`: Path where the output flood extent map will be saved
 
-Note that the input CSV file can be exported from **DELFT-FEWS** and must follow this structure:
+Note that the input CSV file can be exported from **Delft-FEWS** and must follow this structure:
 
 | GMT+7 | ID6     |
 |-------|---------|
