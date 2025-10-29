@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "absl-py>=2.3.1",
+    "cartopy>=0.25.0",
+    "contextily>=1.6.2",
     "geopandas>=1.1.1",
     "hydromt>=1.2.0",
     "ipykernel>=7.1.0",
