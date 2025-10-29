@@ -1,6 +1,7 @@
 # EO-Flood-Ops
 
-A Python package for **flood extent modeling** using Earth Observation (EO) data and threshold-based machine learning (ML) approaches.  
+A Python package for **flood extent modeling** using Earth Observation (EO) data and threshold-based machine learning (ML) approaches. 
+
 EO-Flood-Ops provides tools to process satellite imagery, particularly **SAR data**, to detect and map flood extents.  
 It is suitable for both **research** and **operational flood monitoring** applications.
 
@@ -57,7 +58,7 @@ pip install -e .
 
 ## Usage
 
-### Training a Model
+### Training a model
 
 You can train and use different types of flood prediction models using the provided classes in the `eo_flood_ops` package:
 
@@ -81,23 +82,24 @@ python src/eo_flood_ops/run_model.py \
     --model path/to/trained_model.pkl \
     --output path/to/output_flood_map.tif
 ```
-Note that the input CSV file can be exported from **DELFT-FEWS** and must follow this structure:
-
-GMT+7,ID6
-,H.obs
-2023-11-14 01:00:00,1.12
-2023-11-14 02:00:00,1.03
-
-where:
-- The first row specifies the *time zone and station ID.  
-- The second row contains the column headers (`H.obs` = observed water level).  
-- Subsequent rows contain timestamped water level observations.  
-
 **Arguments:**
 - `--input`: Path to the input water level data (CSV format)
 - `--model`: Path to the pickled trained model
 - `--output`: Path where the output flood extent map will be saved
 
+Note that the input CSV file can be exported from **DELFT-FEWS** and must follow this structure:
+
+| GMT+7 | ID6     |
+|-------|---------|
+|       | H.obs   |
+| 2023-11-14 01:00:00 | 1.12 |
+| 2023-11-14 02:00:00 | 1.03 |
+
+
+where:
+- The first row specifies the *time zone and station ID.  
+- The second row contains the column headers (`H.obs` = observed water level).  
+- Subsequent rows contain timestamped water level observations.  
 
 ## Creating a Standalone Executable
 
