@@ -2,6 +2,7 @@ import argparse
 import os
 import pickle
 import pandas as pd
+import warnings
 from affine import Affine
 
 from eo_flood_ops.general_utils import generate_timeseries_ds
@@ -47,7 +48,6 @@ if __name__ == "__main__":
 
     # Parse numeric offset (e.g. +7)
     offset_hours = int(tz_part.replace("GMT", ""))
-    print(f"Detected timezone offset: {offset_hours:+d} hours")
 
     # Read actual data (skip the first line only) 
     df_water = pd.read_csv(waterlevels_fn, skiprows=[0])
@@ -63,6 +63,17 @@ if __name__ == "__main__":
         .dt.tz_localize(f"Etc/GMT{-offset_hours}")
         .dt.tz_convert("UTC")
     )
+
+    # Check for missing or invalid values (-999)
+    invalid_rows = df_water[df_water["water_level"] == -999]
+
+    if not invalid_rows.empty:
+        warnings.warn(
+            f"Removed {len(invalid_rows)} row(s) with missing value (-999) at timestamps: {invalid_rows['datetime'].to_list()}",
+            UserWarning
+        )
+        # Drop invalid rows
+        df_water = df_water[df_water["water_level"] != -999]
 
     gauge_levels = df_water["water_level"].to_numpy()
     timestamps = df_water["datetime"]
@@ -92,6 +103,7 @@ if __name__ == "__main__":
     )
 
     # Save to NetCDF
+    # the filename part from the first line, e.g. "ID6"
     output_fn = tz_line.split(",")[-1].strip() 
-    output_path = f"{output_dir}/{output_fn}_flood_timeseries.nc"
+    output_path = f"{output_dir}/output_{output_fn}.nc"
     ds.to_netcdf(output_path)
