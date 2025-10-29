@@ -7,7 +7,7 @@ import warnings
 from shapely.geometry import box
 from rasterio.features import geometry_mask
 import xarray as xr
-
+import hydromt  # noqa: F401 (it used in .raster extension)
 
 def tif_to_clipped_masked_array(
     tif_path: str, geojson_path: str
@@ -144,7 +144,7 @@ def find_closest_valid(df, dt, station):
     return None, None
 
 
-def generate_wet_dry_timeseries_ds(water_levels, timestamps, tm, transform, crs):
+def generate_timeseries_ds(water_levels, timestamps, tm, transform, crs=rasterio.crs.CRS.from_epsg(4326)):
     """
     Generate a CF-compliant xarray Dataset of wet/dry masks (boolean) or
     water depths (float) for a time series of water levels using a trained model.
