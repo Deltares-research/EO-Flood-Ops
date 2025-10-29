@@ -1,7 +1,4 @@
 # EO-Flood-Ops
-|status|
-.. |status| image:: https://www.repostatus.org/badges/latest/wip.svg
-
 A Python package for **flood extent modeling** using Earth Observation (EO) data and threshold-based machine learning (ML) approaches. 
 
 EO-Flood-Ops provides tools to process satellite imagery, particularly **SAR data**, to detect and map flood extents.  
