@@ -1,10 +1,22 @@
 # EO-Flood-Ops
+A Python package for **flood extent modeling** using Earth Observation (EO) data and threshold-based machine learning (ML) approaches. 
 
-A Python package for flood extent modeling using Earth Observation (EO) data and threshold-based approaches.
+EO-Flood-Ops provides tools to process satellite imagery, particularly **SAR data**, to detect and map flood extents.  
+It is suitable for both **research** and **operational flood monitoring** applications.
+
 
 ## Overview
 
-EO-Flood-Ops provides tools for processing satellite imagery (particularly SAR data) to detect and map flood extents. The package includes threshold-based models for identifying inundated areas and utilities for working with geospatial raster data.
+This package implements two main ML flood modeling approaches:
+
+- **Thresholding Model:** Computes flood inundation extent.  
+- **Manifold Model:** Computes both inundation **extent** and **depth**, providing an alternative to hydraulic flood modeling.  
+
+Both models were originally developed by **Google** and are described in their paper: [Nevo et al., 2022](https://hess.copernicus.org/articles/26/4013/2022/hess-26-4013-2022.html).
+
+> **Note:** The original code for these models is licensed under the **Apache License, Version 2.0**. You can view the license [here](https://www.apache.org/licenses/LICENSE-2.0).
+
+EO-Flood-Ops provides tools to **prepare all necessary datasets** — including water levels, DEMs, and satellite-derived flood extents — for training the models. The package also demonstrates how to **apply these models operationally** to generate flood extent predictions.
 
 ## Features
 
@@ -45,22 +57,48 @@ pip install -e .
 
 ## Usage
 
+### Training a model
+
+You can train and use different types of flood prediction models using the provided classes in the `eo_flood_ops` package:
+
+- **Thresholding Model:** Use the `ThresholdingModel` class from `eo_flood_ops.thresholding_model`.  
+- **Manifold Model:** Use the `ManifoldModel` class from `eo_flood_ops.manifold_model`.
+
+Data required for model training — such as **water levels**, **satellite-derived flood extents**, and **digital elevation models (DEM)** — can be prepared using the utility functions available in `eo_flood_ops.general_utils`.
+
+> Note: A generic model training function is currently under development (WIP).
+
+For examples on how to train and use the models, please refer to the **notebooks** section of this repository.
+
+
 ### Running a model
 
 The main entry point is `run_model.py`, which applies a trained threshold model or manifold model to input data:
 
 ```bash
 python src/eo_flood_ops/run_model.py \
-    --input path/to/input_data.tif \
+    --input path/to/input_water_level_data.csv \
     --model path/to/trained_model.pkl \
     --output path/to/output_flood_map.tif
 ```
-
 **Arguments:**
 - `--input`: Path to the input water level data (CSV format)
 - `--model`: Path to the pickled trained model
 - `--output`: Path where the output flood extent map will be saved
 
+Note that the input CSV file can be exported from **DELFT-FEWS** and must follow this structure:
+
+| GMT+7 | ID6     |
+|-------|---------|
+|       | H.obs   |
+| 2023-11-14 01:00:00 | 1.12 |
+| 2023-11-14 02:00:00 | 1.03 |
+
+
+where:
+- The first row specifies the *time zone and station ID.  
+- The second row contains the column headers (`H.obs` = observed water level).  
+- Subsequent rows contain timestamped water level observations.  
 
 ## Creating a Standalone Executable
 
