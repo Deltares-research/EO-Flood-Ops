@@ -7,7 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "absl-py>=2.3.1",
     "geopandas>=1.1.1",
-    "hydromt>=1.2.0",
     "ipykernel>=7.1.0",
     "matplotlib>=3.10.7",
     "opencv-python>=4.12.0.88",

@@ -7,7 +7,6 @@ import warnings
 from shapely.geometry import box
 from rasterio.features import geometry_mask
 import xarray as xr
-import hydromt  # noqa: F401 (it used in .raster extension)
 
 def tif_to_clipped_masked_array(
     tif_path: str, geojson_path: str
@@ -240,7 +239,6 @@ def generate_timeseries_ds(water_levels, timestamps, tm, transform, crs=rasterio
     # Coordinate metadata
     ds["lat"].attrs.update({"standard_name": "latitude", "units": "degrees_north"})
     ds["lon"].attrs.update({"standard_name": "longitude", "units": "degrees_east"})
-    ds.raster.set_crs("EPSG:4326")
 
     return ds
 
