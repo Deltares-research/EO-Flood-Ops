@@ -1,6 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_dynamic_libs, collect_data_files, collect_submodules, collect_all
-import os
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 # Collect pyproj data files (includes proj.db)
 pyproj_datas = collect_data_files('pyproj')
@@ -43,28 +42,20 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='eo_flood_ops_model',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
-    entitlements_file=None,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='eo_flood_ops_model',
     entitlements_file=None,
 )
