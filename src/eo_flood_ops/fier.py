@@ -7,6 +7,11 @@ import warnings
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import hydroeval as he
+import pyproj
+from datetime import datetime
+from pystac_client import Client
+import odc.stac as odc_stac
+from collections.abc import Sequence
 
 def reof(
     da: xr.DataArray,
@@ -149,6 +154,8 @@ def find_hydro_mode(
     p_thrd: float = 0.05,
     time_dim: str = "time",
     site_dim: str = "site",
+    warn_thrd: pd.Timedelta = pd.Timedelta(hours=5),
+    error_thrd: pd.Timedelta = pd.Timedelta(days=1),
 ) -> xr.Dataset:
     """
     Calculate correlation between temporal patterns and hydrological data.
@@ -161,7 +168,8 @@ def find_hydro_mode(
        p_thrd: Threshold (default: 0.05) of p-value below which a correlation is considered significant
        time_dim: name of the time dimension/coordinate shared between ds_eof and da_hydro. default = "time"
        site_dim: name of the site/gauge dimension/coordinate in da_hydro. default = "site"
-
+       warn_thrd: Warning threshold for time difference between satellite and hydro data (default: 5 hours)
+       error_thrd: Error threshold for time difference between satellite and hydro data (default: 1 day)
     output (site X modes):
        site: Names of selected sites of the modes
        best_r: The highest correlations between RTPCs and hydrological data
@@ -182,7 +190,14 @@ def find_hydro_mode(
     time_tpc = ds_eof.temporal_modes.sel({mode_dim: int(1)})[time_dim]
     # hydro measurements rarely land on the exact satellite acquisition timestamps,
     # so match each satellite timestamp to the closest valid hydro observation instead
-    hydro_common = _find_closest_valid_hydro(da_hydro, time_tpc.values, time_dim=time_dim, site_dim=site_dim)
+    hydro_common = _find_closest_valid_hydro(
+        da_hydro=da_hydro, 
+        times= time_tpc.values, 
+        time_dim=time_dim, 
+        site_dim=site_dim,
+        warn_thrd = warn_thrd,
+        error_thrd = error_thrd,
+    )
     hydro_site = hydro_common[site_dim].values
     hydro_values = hydro_common.values
 
@@ -611,3 +626,101 @@ def _find_closest_valid_hydro(
         dims=(site_dim, time_dim),
         coords={site_dim: sites, time_dim: query_times},
     )
+
+def download_gfm(
+    bbox: tuple[float, float, float, float],
+    bands: Sequence[str],
+    start_time: datetime,
+    end_time: datetime,
+    *,
+    crs: str | pyproj.CRS | None = None,
+    resolution: float | None = None,
+    groupby: str = "solar_day",
+) -> xr.Dataset:
+    """Get GFM data for the specified bounding box and time range.
+    
+    Parameters
+    ----------
+    bbox : tuple[float, float, float, float]
+        Bounding box in the format (minx, miny, maxx, maxy).
+    bands : Sequence[str]
+        List of GFM data bands to retrieve.
+    start_time : datetime
+        Start of the time range for the search.
+    end_time : datetime
+        End of the time range for the search.
+    crs : str | pyproj.CRS | None, optional
+        Coordinate reference system for the output data. If None, uses native CRS.
+    resolution : float | None, optional
+        Resolution for the output data. Must be provided together with `crs`. 
+        CRS and Resolution must match. If None, uses native resolution (20 meters).
+    groupby : str, optional
+        Grouping method for the loaded data, default is "solar_day".
+
+    Returns
+    -------
+    xr.Dataset
+        The loaded GFM data as an xarray Dataset.
+
+    """
+    if (crs is None) != (resolution is None):
+        raise ValueError("Provide both crs and resolution, or neither. " \
+        "Note that crs and resolution should match, e.g., crs='EPSG:4326' with resolution=20/111_000 " \
+        "considering 1 degree ≈ 111 km and the raw GFM data resolution is 20 meters.")
+
+    api_url = "https://stac.eodc.eu/api/v1"
+    eodc_catalog = Client.open(api_url)
+    collection_id = "GFM"
+
+    # Perform a search in the catalog with the specified parameters
+    items = list(eodc_catalog.search(
+        collections=[collection_id], 
+        bbox=bbox, 
+        datetime=(start_time, end_time),
+    ).items())
+
+    # Print the number of items found for debugging purposes
+    print(f"Found {len(items)} GFM items.")
+
+    if not items:
+        raise ValueError("No GFM items found for the bbox and time range.")
+
+    for item in items:
+        data_keys = {
+            key for key, asset in item.assets.items()
+            if "data" in (asset.roles or [])
+        }
+        missing = set(bands) - data_keys
+        if missing:
+            raise ValueError(
+                f"Unavailable data bands for {item.id}: {sorted(missing)}. "
+                f"Available data keys: {sorted(data_keys)}"
+            )
+
+    if crs is None:
+        crs = pyproj.CRS.from_wkt(items[0].properties["proj:wkt2"])
+        resolution = items[0].properties["gsd"]
+
+    data = odc_stac.load(
+        items, 
+        bbox=bbox, 
+        bands=bands, 
+        crs=crs, 
+        resolution=resolution,
+        groupby=groupby,
+    )
+
+    # Check if all pixels contain no data (255) and drop the corresponding time slices
+    for band in bands:
+        spatial_dims = [dim for dim in data[band].dims if dim != "time"]
+        no_data = (data[band] == 255).all(dim=spatial_dims).compute()
+
+        if no_data.any().item():
+            no_data_dates = data.time.where(no_data, drop=True)
+            print(
+                f"All pixels are no data for band {band} on dates: "
+                f"{no_data_dates.values}. Dropping these time slices."
+            )
+            data = data.isel(time=~no_data)
+    
+    return data
