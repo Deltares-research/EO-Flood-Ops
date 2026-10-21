@@ -315,6 +315,212 @@ def combine_eof_hydro(
 
     return eof_hydro
 
+def synthesize(
+        reof_ds: xr.Dataset, 
+        da_hydro: xr.DataArray, 
+        site_dim: str = "site",
+        *,
+        threshold: float | None = None,
+) -> xr.DataArray:
+    """Reconstruct an image using the site-matched polynomial for each mode.
+
+    Args:
+        reof_ds: Output of combine_eof_hydro(). It must contain ``site``
+            indexed by ``mode`` and ``coefficients`` indexed by ``mode`` and
+            ``degree``.
+        da_hydro: Hydrological data indexed by ``site_dim`` (also used for training the polynomial). A single time step is
+            expected, for example ``da_hydro.sel(time=date_str)``.
+        site_dim: Name of the site dimension in ``da_hydro``.
+        threshold: Optional calibrated cutoff. If provided, return 0 for land,
+            1 for water (score >= threshold), and NaN for missing pixels.
+    """
+    if not isinstance(da_hydro, xr.DataArray):
+        raise TypeError("da_hydro must be an xarray.DataArray indexed by site_dim")
+    if site_dim not in da_hydro.dims:
+        raise ValueError(f"da_hydro must contain the site dimension {site_dim!r}")
+    if "site" not in reof_ds or "coefficients" not in reof_ds:
+        raise ValueError("reof_ds must contain 'site' and 'coefficients'")
+
+    modes = reof_ds["mode"].values
+    predicted_pcs = []
+    used_modes = []
+
+    for mode in modes:
+        site = reof_ds["site"].sel(mode=mode).item()
+        try:
+            da_hydro_value = da_hydro.sel({site_dim: site}).item()
+        except KeyError:
+            continue
+
+        if not np.isfinite(da_hydro_value):
+            continue
+
+        coefficients = reof_ds["coefficients"].sel(mode=mode).values
+        pc_value = np.polynomial.polynomial.polyval(da_hydro_value, coefficients)
+        predicted_pcs.append(pc_value)
+        used_modes.append(mode)
+
+    if not used_modes:
+        raise ValueError("No mode sites were found in da_hydro with finite values")
+
+    pcs = xr.DataArray(
+        predicted_pcs,
+        dims="mode",
+        coords={"mode": used_modes},
+    )
+    reconstructed = pcs.dot(reof_ds["spatial_modes"].sel(mode=used_modes))
+    reconstructed = reconstructed + reof_ds["temporal_mean"]
+
+    reconstructed = reconstructed.astype(np.float32).rename("synthesized")
+    if threshold is not None:
+        return correct_binary_image(reconstructed, threshold)
+    return reconstructed
+
+
+def correct_binary_image(
+    predicted_image: xr.DataArray,
+    threshold: float = 0.5,
+) -> xr.DataArray:
+    """Classify scores as land (0) or water (1), preserving nonfinite pixels as NaN."""
+    if not isinstance(predicted_image, xr.DataArray):
+        raise TypeError("predicted_image must be an xarray.DataArray")
+    if not np.isscalar(threshold) or not np.isfinite(threshold):
+        raise ValueError("threshold must be a finite scalar")
+    return (
+        (predicted_image.astype(np.float64) >= threshold)
+        .astype(np.float32)
+        .where(np.isfinite(predicted_image))
+        .rename("floodmap")
+    )
+
+
+def calibrate_synthesis_threshold(
+    reof_ds: xr.Dataset,
+    training_images: xr.DataArray,
+    time_dim: str = "time",
+) -> xr.Dataset:
+    """Synthesize every training image and maximize pooled water F1.
+
+    Uses the per-mode water levels saved as ``hydro_var`` by
+    ``combine_eof_hydro``, not the observed temporal-mode amplitudes.
+    Images must have exactly the training times and spatial grid, with only
+    0 (land), 1 (water), or NaN (NoData). Every image needs valid observations
+    and every mode needs a finite water level at every training time.
+
+    All distinct score boundaries are evaluated using ``score >= threshold``;
+    scores are not clipped to [0, 1]. Ties favor the candidate closest to 0.5,
+    then the smaller threshold. F1 is zero when its denominator is zero.
+    Requires at least one observed water pixel. All valid pixel/date pairs
+    are pooled, so this is not a mean of per-image F1 scores.
+
+    Returns the scalar ``best_threshold``, threshold/F1/confusion-count curves,
+    continuous ``reconstructed`` images, ``binary`` images, and per-image
+    confusion counts and F1. NoData is excluded from all metrics.
+    Reconstruction and the exact sorted search run in memory.
+    This is in-sample calibration, not an independent validation score.
+    """
+    if not isinstance(training_images, xr.DataArray):
+        raise TypeError("training_images must be an xarray.DataArray")
+    if time_dim not in training_images.dims or training_images.sizes[time_dim] == 0:
+        raise ValueError("training_images must contain a nonempty time dimension")
+    required = {"hydro_var", "site", "coefficients", "spatial_modes", "temporal_mean"}
+    missing = required.difference(reof_ds.variables)
+    if missing:
+        raise ValueError(f"reof_ds is missing required variables: {sorted(missing)}")
+    if reof_ds.sizes.get("mode", 0) == 0:
+        raise ValueError("reof_ds must contain at least one mode")
+    expected_dims = {time_dim, *reof_ds["temporal_mean"].dims}
+    if set(training_images.dims) != expected_dims:
+        raise ValueError("training_images dimensions must match time and the model spatial grid")
+    xr.align(training_images, reof_ds, join="exact", copy=False)
+    if reof_ds["hydro_var"].dims != ("mode", time_dim):
+        raise ValueError("hydro_var must have dimensions ('mode', time_dim)")
+    if not np.isfinite(reof_ds["hydro_var"].values).all():
+        raise ValueError("Every training time must have finite hydro_var for every mode")
+
+    images = training_images.transpose(time_dim, *reof_ds["temporal_mean"].dims)
+    observed = np.asarray(images.values)
+    valid = ~np.isnan(observed)
+    if not np.isin(observed[valid], [0, 1]).all():
+        raise ValueError(
+            "training_images must contain only 0, 1, or NaN; mask NoData codes "
+            "(e.g. 255) before training REOF and calibrating"
+        )
+    if not valid.reshape(images.sizes[time_dim], -1).any(axis=1).all():
+        raise ValueError("Every training image must contain observed pixels")
+    if not np.any(observed[valid] == 1):
+        raise ValueError("Water F1 calibration requires at least one observed water pixel")
+
+    sites, site_indices = np.unique(reof_ds["site"].values, return_index=True)
+    for site in sites:
+        levels = reof_ds["hydro_var"].isel(
+            mode=np.flatnonzero(reof_ds["site"].values == site)
+        ).values
+        if not np.all(levels == levels[0]):
+            raise ValueError(f"Inconsistent training water levels for site {site!r}")
+
+    reconstructed = xr.concat(
+        [
+            synthesize(
+                reof_ds,
+                xr.DataArray(
+                    reof_ds["hydro_var"].isel({time_dim: index}).values[site_indices],
+                    dims="site",
+                    coords={"site": sites},
+                ),
+            )
+            for index in range(images.sizes[time_dim])
+        ],
+        dim=images[time_dim],
+    ).transpose(*images.dims)
+    if not np.isfinite(reconstructed.values[valid]).all():
+        raise ValueError("Synthesis produced nonfinite scores at observed training pixels")
+
+    scores = reconstructed.values[valid].astype(np.float64)
+    actual = observed[valid].astype(np.int64)
+    order = np.argsort(scores)
+    scores, actual = scores[order], actual[order]
+    starts = np.r_[0, np.flatnonzero(np.diff(scores)) + 1]
+    thresholds = np.r_[scores[starts], np.nextafter(scores[-1], np.inf)]
+    starts = np.r_[starts, scores.size]
+    positives_before = np.r_[0, np.cumsum(actual)][starts]
+    tp = actual.sum() - positives_before
+    fp = scores.size - starts - tp
+    fn = positives_before
+    denominator = 2 * tp + fp + fn
+    f1 = np.divide(
+        2 * tp, denominator,
+        out=np.zeros(thresholds.size, dtype=float),
+        where=denominator != 0,
+    )
+    best_indices = np.flatnonzero(f1 == f1.max())
+    best = best_indices[np.argmin(np.abs(thresholds[best_indices] - 0.5))]
+    best_threshold = float(thresholds[best])
+    binary = correct_binary_image(reconstructed, best_threshold).where(images.notnull())
+    spatial_dims = list(reof_ds["temporal_mean"].dims)
+    image_tp = ((binary == 1) & (images == 1)).sum(spatial_dims)
+    image_fp = ((binary == 1) & (images == 0)).sum(spatial_dims)
+    image_fn = ((binary == 0) & (images == 1)).sum(spatial_dims)
+    image_denominator = 2 * image_tp + image_fp + image_fn
+    return xr.Dataset(
+        {
+            "best_threshold": best_threshold,
+            "best_f1": float(f1[best]),
+            "f1": ("threshold", f1),
+            "true_positives": ("threshold", tp),
+            "false_positives": ("threshold", fp),
+            "false_negatives": ("threshold", fn),
+            "reconstructed": reconstructed,
+            "binary": binary,
+            "image_true_positives": image_tp,
+            "image_false_positives": image_fp,
+            "image_false_negatives": image_fn,
+            "image_f1": (2 * image_tp / image_denominator.where(image_denominator != 0)).fillna(0),
+        },
+        coords={"threshold": thresholds},
+        attrs={"objective": "pooled_water_f1", "classification_rule": "score >= threshold"},
+    )
+
 def plot_fier_diagnostics(
     eof_hydro: xr.Dataset,
     spatial_vmin: float = -0.01,
